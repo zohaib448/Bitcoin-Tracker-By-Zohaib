@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 class BitcoinDashboard:
-    def _init_(self):
+    def __init__(self):
         self.cache_file = "bitnodes_cache.json"
         self.data_file = "network_data.json"
         self.max_data_points = 1008  # 7 days of 10-minute intervals
@@ -379,5 +379,7 @@ class BitcoinDashboard:
         </div>
         """, unsafe_allow_html=True)
 
-if _name_ == "_main_":
-    main()
+# Run the dashboard
+if __name__ == "__main__":
+    dashboard = BitcoinDashboard()
+    dashboard.run_dashboard()
