@@ -381,5 +381,5 @@ class BitcoinDashboard:
 
 # Run the dashboard
 if _name_ == "_main_":
-    dashboard = BitcoinDashboard()
+    dashboard = BitcoinGashboard()
     dashboard.run_dashboard()
