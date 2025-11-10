@@ -263,6 +263,14 @@ class BitcoinDashboard:
             border-radius: 0.5rem;
             margin: 0.5rem 0;
         }
+        .refresh-button {
+            background-color: #f7931a;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
         @media (max-width: 768px) {
             .main > div {
                 padding: 0.5rem;
@@ -271,8 +279,25 @@ class BitcoinDashboard:
         </style>
         """, unsafe_allow_html=True)
         
-        # Header with branding
-        st.markdown("<h1 style='text-align: center;'>₿ Zohaib's Bitcoin Tracker</h1>", unsafe_allow_html=True)
+        # Header with branding and refresh button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("<h1 style='text-align: center;'>₿ Zohaib's Bitcoin Tracker</h1>", unsafe_allow_html=True)
+        with col2:
+            if st.button("🔄 Refresh", key="refresh", use_container_width=True):
+                st.rerun()
+        
+        # Auto-refresh every 5 minutes
+        st.markdown("""
+        <script>
+        function refreshPage() {
+            setTimeout(function() {
+                window.location.reload();
+            }, 300000); // 5 minutes
+        }
+        window.onload = refreshPage;
+        </script>
+        """, unsafe_allow_html=True)
         
         # Real-time BTC Price
         st.markdown("### Live Bitcoin Price")
@@ -292,8 +317,10 @@ class BitcoinDashboard:
         # Bitnodes Data Analysis
         st.markdown("### Network Analysis")
         
-        bitnodes_data = self.get_bitnodes_data()
-        historical_data = self.load_historical_data()
+        # Show loading spinner while fetching data
+        with st.spinner('Fetching latest network data...'):
+            bitnodes_data = self.get_bitnodes_data()
+            historical_data = self.load_historical_data()
         
         if not bitnodes_data:
             st.error("Unable to fetch Bitnodes data. Please try again later.")
@@ -328,7 +355,8 @@ class BitcoinDashboard:
             with col1:
                 st.metric("Previous Tor %", f"{previous_tor:.1f}%")
             with col2:
-                st.metric("Current Tor %", f"{current_tor_percentage:.1f}%")
+                st.metric("Current Tor %", f"{current_tor_percentage:.1f}%", 
+                         delta=f"{tor_trend:+.1f}%")
             
             st.markdown(f"""
             <div style='padding: 1rem; background-color: {bias_color}20; border-radius: 0.5rem; border-left: 4px solid {bias_color};'>
@@ -372,9 +400,18 @@ class BitcoinDashboard:
         with col3:
             st.metric("Data Points", len(historical_data))
         
+        # Refresh instructions
+        st.markdown("---")
+        st.markdown("""
+        <div style='text-align: center; color: #666;'>
+            <p>💡 <strong>Auto-refresh:</strong> Page refreshes every 5 minutes</p>
+            <p>🔄 <strong>Manual refresh:</strong> Click the refresh button at the top</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         # Last update time
         st.markdown(f"""
-        <div style='text-align: center; margin-top: 2rem; color: #666; font-size: 0.8rem;'>
+        <div style='text-align: center; margin-top: 1rem; color: #666; font-size: 0.8rem;'>
             Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         </div>
         """, unsafe_allow_html=True)
