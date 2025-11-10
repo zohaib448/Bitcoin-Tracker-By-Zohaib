@@ -1,3 +1,4 @@
+# bitcoin_tracker_complete.py
 import streamlit as st
 import requests
 import pandas as pd
@@ -111,6 +112,44 @@ class BitcoinDashboard:
             self.set_cached_data('bitnodes', data)
         
         return data
+    
+    def analyze_nodes_distribution(self, nodes: Dict) -> Dict[str, Any]:
+        """Analyze node distribution by type, version, and location"""
+        if not nodes:
+            return {}
+        
+        sampled_nodes = dict(list(nodes.items())[:self.sample_size])
+        
+        analysis = {
+            'total_nodes': len(sampled_nodes),
+            'node_types': {},
+            'versions': {},
+            'countries': {},
+            'user_agents': {},
+            'protocols': {}
+        }
+        
+        for node_data in sampled_nodes.values():
+            if isinstance(node_data, list) and len(node_data) >= 2:
+                # Analyze user agent
+                user_agent = str(node_data[1])
+                analysis['user_agents'][user_agent] = analysis['user_agents'].get(user_agent, 0) + 1
+                
+                # Analyze node type (Tor, IPv4, IPv6)
+                if 'tor' in user_agent.lower() or 'onion' in user_agent.lower():
+                    node_type = 'Tor'
+                elif ':' in str(node_data[0]):  # IPv6
+                    node_type = 'IPv6'
+                else:
+                    node_type = 'IPv4'
+                analysis['node_types'][node_type] = analysis['node_types'].get(node_type, 0) + 1
+                
+                # Extract version from user agent
+                if 'Satoshi' in user_agent:
+                    version = user_agent.split('Satoshi:')[1].split('/')[0] if 'Satoshi:' in user_agent else 'Unknown'
+                    analysis['versions'][version] = analysis['versions'].get(version, 0) + 1
+        
+        return analysis
     
     def calculate_tor_percentage(self, nodes: Dict) -> float:
         """Calculate percentage of Tor nodes"""
@@ -245,6 +284,71 @@ class BitcoinDashboard:
         
         return fig
     
+    def create_node_distribution_chart(self, analysis: Dict) -> go.Figure:
+        """Create node type distribution chart"""
+        node_types = analysis.get('node_types', {})
+        
+        if not node_types:
+            fig = go.Figure()
+            fig.update_layout(
+                title="Node Type Distribution",
+                height=300
+            )
+            return fig
+        
+        labels = list(node_types.keys())
+        values = list(node_types.values())
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.4,
+            marker_colors=['#FF6B6B', '#4ECDC4', '#45B7D1']
+        )])
+        
+        fig.update_layout(
+            title="Node Type Distribution",
+            height=300,
+            showlegend=True,
+            margin=dict(l=20, r=20, t=40, b=20)
+        )
+        
+        return fig
+    
+    def create_version_distribution_chart(self, analysis: Dict) -> go.Figure:
+        """Create Bitcoin client version distribution chart"""
+        versions = analysis.get('versions', {})
+        
+        if not versions:
+            fig = go.Figure()
+            fig.update_layout(
+                title="Bitcoin Client Versions",
+                height=300
+            )
+            return fig
+        
+        # Get top 10 versions
+        sorted_versions = sorted(versions.items(), key=lambda x: x[1], reverse=True)[:10]
+        version_names = [f"v{ver[0]}" for ver in sorted_versions]
+        version_counts = [ver[1] for ver in sorted_versions]
+        
+        fig = go.Figure(data=[go.Bar(
+            x=version_counts,
+            y=version_names,
+            orientation='h',
+            marker_color='#F7931A'
+        )])
+        
+        fig.update_layout(
+            title="Top 10 Bitcoin Client Versions",
+            xaxis_title="Number of Nodes",
+            yaxis_title="Version",
+            height=400,
+            margin=dict(l=20, r=20, t=40, b=20)
+        )
+        
+        return fig
+    
     def run_dashboard(self):
         """Main dashboard execution"""
         
@@ -270,6 +374,13 @@ class BitcoinDashboard:
             padding: 0.5rem 1rem;
             border-radius: 0.5rem;
             cursor: pointer;
+        }
+        .node-analysis-section {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+            border-left: 4px solid #f7931a;
         }
         @media (max-width: 768px) {
             .main > div {
@@ -331,11 +442,15 @@ class BitcoinDashboard:
         total_nodes = len(nodes)
         current_tor_percentage = self.calculate_tor_percentage(nodes)
         
+        # NEW: Analyze node distribution
+        node_analysis = self.analyze_nodes_distribution(nodes)
+        
         current_snapshot = {
             'timestamp': datetime.now().isoformat(),
             'total_nodes': total_nodes,
             'active_nodes': total_nodes,  # Bitnodes provides active snapshots
-            'tor_percentage': current_tor_percentage
+            'tor_percentage': current_tor_percentage,
+            'node_analysis': node_analysis  # Store analysis in historical data
         }
         
         # Get previous data for comparisons
@@ -343,7 +458,69 @@ class BitcoinDashboard:
         if historical_data:
             previous_data = historical_data[-1]
         
+        # NEW: Current Nodes Analyzer Section
+        st.markdown("### 🔍 Current Nodes Analyzer")
+        
+        if node_analysis:
+            # Node Type Statistics
+            st.markdown("#### Node Type Distribution")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            total_analyzed = node_analysis.get('total_nodes', 0)
+            node_types = node_analysis.get('node_types', {})
+            
+            with col1:
+                st.metric("Total Analyzed", f"{total_analyzed:,}")
+            with col2:
+                ipv4_count = node_types.get('IPv4', 0)
+                ipv4_percent = (ipv4_count / total_analyzed) * 100 if total_analyzed > 0 else 0
+                st.metric("IPv4 Nodes", f"{ipv4_count:,}", f"{ipv4_percent:.1f}%")
+            with col3:
+                ipv6_count = node_types.get('IPv6', 0)
+                ipv6_percent = (ipv6_count / total_analyzed) * 100 if total_analyzed > 0 else 0
+                st.metric("IPv6 Nodes", f"{ipv6_count:,}", f"{ipv6_percent:.1f}%")
+            with col4:
+                tor_count = node_types.get('Tor', 0)
+                tor_percent = (tor_count / total_analyzed) * 100 if total_analyzed > 0 else 0
+                st.metric("Tor Nodes", f"{tor_count:,}", f"{tor_percent:.1f}%")
+            
+            # Charts
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                node_chart = self.create_node_distribution_chart(node_analysis)
+                st.plotly_chart(node_chart, use_container_width=True)
+            
+            with col2:
+                version_chart = self.create_version_distribution_chart(node_analysis)
+                st.plotly_chart(version_chart, use_container_width=True)
+            
+            # Detailed Version Analysis
+            st.markdown("#### Detailed Version Analysis")
+            versions = node_analysis.get('versions', {})
+            if versions:
+                version_data = []
+                for version, count in versions.items():
+                    percentage = (count / total_analyzed) * 100
+                    version_data.append({
+                        'Version': f"v{version}",
+                        'Nodes': count,
+                        'Percentage': f"{percentage:.1f}%"
+                    })
+                
+                version_df = pd.DataFrame(version_data)
+                version_df = version_df.sort_values('Nodes', ascending=False)
+                
+                st.dataframe(
+                    version_df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("No version data available in the current sample.")
+        
         # Tor Trend Analysis
+        st.markdown("---")
         st.markdown("#### Tor Privacy Trend Analysis")
         
         if previous_data:
@@ -385,12 +562,12 @@ class BitcoinDashboard:
         self.save_historical_data(historical_data)
         
         # Tor Trend Chart
-        st.markdown("#### Tor Privacy Metrics")
+        st.markdown("#### Tor Privacy Metrics (24h Trend)")
         tor_chart = self.create_tor_chart(historical_data)
         st.plotly_chart(tor_chart, use_container_width=True)
         
         # Network Statistics
-        st.markdown("#### Network Statistics")
+        st.markdown("#### Network Overview")
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -406,8 +583,9 @@ class BitcoinDashboard:
         <div style='text-align: center; color: #666;'>
             <p>💡 <strong>Auto-refresh:</strong> Page refreshes every 5 minutes</p>
             <p>🔄 <strong>Manual refresh:</strong> Click the refresh button at the top</p>
+            <p>🔍 <strong>Nodes Analyzed:</strong> {sample_size} random nodes sampled for analysis</p>
         </div>
-        """, unsafe_allow_html=True)
+        """.format(sample_size=self.sample_size), unsafe_allow_html=True)
         
         # Last update time
         st.markdown(f"""
