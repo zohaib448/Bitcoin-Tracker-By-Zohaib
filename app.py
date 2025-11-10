@@ -379,7 +379,5 @@ class BitcoinDashboard:
         </div>
         """, unsafe_allow_html=True)
 
-# Run the dashboard
 if _name_ == "_main_":
-    dashboard = BitcoinGashboard()
-    dashboard.run_dashboard()
+    main()
